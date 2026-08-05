@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment & local config
+.env
+.env.local
+.env.*.local
+
+# Vite cache
+.vite/
+
+# Editor & OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sharp (installed temporarily for image processing)
+# node_modules already covers this, but be explicit

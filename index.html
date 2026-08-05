@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Parameter Explorer</title>
+        <meta
+            name="description"
+            content="Instant default parameter explorer for ArduPilot vehicles and firmware versions with search, filtering, diff comparison, and .param export."
+        />
+
+        <!-- ArduPilot Favicon -->
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+
+        <!-- FontAwesome Icons -->
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+            integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g"
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+        />
+
+        <!-- Main Stylesheet -->
+        <link rel="stylesheet" href="/src/style.css" />
+    </head>
+    <body>
+        <noscript>
+            <div
+                style="
+                    text-align: center;
+                    padding: 60px 20px;
+                    font-family: sans-serif;
+                    color: #94a3b8;
+                    background: #070b12;
+                    min-height: 100vh;
+                "
+            >
+                <h2 style="color: #f8fafc">JavaScript Required</h2>
+                <p>
+                    ArduPilot Parameter Explorer requires JavaScript to fetch
+                    and display parameter data from GitHub.<br />Please enable
+                    JavaScript in your browser to continue.
+                </p>
+            </div>
+        </noscript>
+
+        <div class="app-container">
+            <!-- Hero Header -->
+            <header class="hero-header">
+                <div>
+                    <div class="brand-title">
+                        <a
+                            href="https://ardupilot.org"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="brand-logo-link"
+                            title="ArduPilot Official Documentation"
+                        >
+                            <img
+                                src="/ardupilot_logo.png"
+                                alt="ArduPilot"
+                                class="brand-logo"
+                            />
+                        </a>
+                        <h1>Parameter Explorer</h1>
+                    </div>
+                    <p class="subtitle">
+                        Search, inspect, compare, and export default parameter
+                        configurations across all ArduPilot vehicles and
+                        firmware releases.
+                        <span class="subtitle-note"
+                            ><i class="fa-solid fa-circle-info"></i> Reflects
+                            base firmware defaults (board-specific hardware
+                            defaults may vary).</span
+                        >
+                    </p>
+                </div>
+
+                <div class="header-badges">
+                    <div class="badge">
+                        <span class="badge-pulse"></span>
+                        <span id="tag-status">Connecting to GitHub...</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Controls Panel -->
+            <section class="control-panel">
+                <!-- Vehicle Cards Bar -->
+                <fieldset class="input-group">
+                    <legend class="group-label">Select Vehicle Type</legend>
+                    <div class="vehicle-card-row" id="vehicle-card-row">
+                        <!-- Populated by JS -->
+                    </div>
+                </fieldset>
+
+                <!-- Selectors Row -->
+                <div class="selector-grid">
+                    <div class="input-group">
+                        <label for="version-select"
+                            >Firmware Version / Release Tag</label
+                        >
+                        <div class="select-wrapper">
+                            <select id="version-select" class="custom-select">
+                                <!-- Populated by JS -->
+                            </select>
+                            <i class="fa-solid fa-chevron-down select-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="search-input">Search</label>
+                        <div class="search-box">
+                            <i
+                                class="fa-solid fa-magnifying-glass search-icon"
+                            ></i>
+                            <input
+                                type="text"
+                                id="search-input"
+                                class="search-input"
+                                placeholder="Search by parameter name (e.g. ANGLE_MAX), description, or unit..."
+                                autocomplete="off"
+                            />
+                            <button
+                                type="button"
+                                id="search-clear"
+                                class="search-clear"
+                                title="Clear search"
+                            >
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category Filter Pills -->
+                <div class="category-bar" id="category-bar">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- Toolbar & Stats -->
+            <div class="action-toolbar">
+                <div class="stats-count" id="stats-count">
+                    Loading parameters...
+                </div>
+
+                <div class="tool-buttons">
+                    <button
+                        type="button"
+                        id="btn-compare"
+                        class="btn btn-secondary"
+                    >
+                        <i class="fa-solid fa-code-compare"></i> Compare
+                        Versions (Diff)
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-export-param"
+                        class="btn btn-primary"
+                    >
+                        <i class="fa-solid fa-download"></i> Export .param File
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-export-csv"
+                        class="btn btn-secondary"
+                    >
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-export-json"
+                        class="btn btn-secondary"
+                    >
+                        <i class="fa-solid fa-file-code"></i> Export JSON
+                    </button>
+                    <button
+                        type="button"
+                        id="btn-share-link"
+                        class="btn btn-secondary"
+                        title="Copy shareable link"
+                    >
+                        <i class="fa-solid fa-link"></i> Share
+                    </button>
+                </div>
+            </div>
+
+            <!-- Data Table Container -->
+            <main class="table-card">
+                <div class="table-responsive">
+                    <table class="param-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 220px">Parameter Name</th>
+                                <th style="width: 130px">Default Value</th>
+                                <th style="width: 160px">Range</th>
+                                <th style="width: 90px">Units</th>
+                                <th>Description & Details</th>
+                                <th style="width: 80px; text-align: center">
+                                    Details
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="param-table-body">
+                            <!-- Table content populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading-spinner" class="loading-state">
+                    <div class="spinner"></div>
+                    <p>
+                        Fetching and parsing parameter definitions directly from
+                        GitHub & Autotest...
+                    </p>
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state" style="display: none">
+                    <i
+                        class="fa-solid fa-filter-circle-xmark"
+                        style="
+                            font-size: 2.5rem;
+                            color: var(--text-muted);
+                            margin-bottom: 12px;
+                        "
+                    ></i>
+                    <h3>No matching parameters found</h3>
+                    <p style="color: var(--text-muted)">
+                        Try adjusting your search keywords or active category
+                        filters.
+                    </p>
+                </div>
+
+                <!-- Error State -->
+                <div id="error-state" class="empty-state" style="display: none">
+                    <i
+                        class="fa-solid fa-triangle-exclamation"
+                        style="
+                            font-size: 2.5rem;
+                            color: var(--accent-rose);
+                            margin-bottom: 12px;
+                        "
+                    ></i>
+                    <h3>Failed to load parameters</h3>
+                    <p style="color: var(--text-muted)">
+                        Could not fetch data from GitHub or Autotest. Check your
+                        connection and
+                        <button
+                            type="button"
+                            onclick="location.reload()"
+                            style="
+                                background: none;
+                                border: none;
+                                color: var(--accent-cyan);
+                                cursor: pointer;
+                                font-size: inherit;
+                                text-decoration: underline;
+                            "
+                        >
+                            retry</button
+                        >.
+                    </p>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div class="pagination-bar" id="pagination-bar">
+                    <div class="page-size-wrapper">
+                        <label
+                            for="page-size-select"
+                            style="
+                                font-size: 0.84rem;
+                                color: var(--text-secondary);
+                                font-weight: 500;
+                            "
+                            >Parameters per page:</label
+                        >
+                        <div class="select-wrapper" style="min-width: 90px">
+                            <select
+                                id="page-size-select"
+                                class="custom-select"
+                                style="
+                                    padding: 6px 28px 6px 12px;
+                                    font-size: 0.84rem;
+                                "
+                            >
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="250">250</option>
+                                <option value="500">500</option>
+                                <option value="all">All</option>
+                            </select>
+                            <i
+                                class="fa-solid fa-chevron-down select-icon"
+                                style="font-size: 0.7rem; right: 10px"
+                            ></i>
+                        </div>
+                    </div>
+
+                    <div class="pagination-controls">
+                        <button
+                            type="button"
+                            id="btn-prev-page"
+                            class="pagination-btn"
+                        >
+                            <i class="fa-solid fa-chevron-left"></i> Previous
+                        </button>
+                        <span
+                            id="page-indicator"
+                            style="
+                                font-size: 0.88rem;
+                                color: var(--text-secondary);
+                            "
+                            >Page 1 of 1</span
+                        >
+                        <button
+                            type="button"
+                            id="btn-next-page"
+                            class="pagination-btn"
+                        >
+                            Next <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Detail Slide-out Drawer -->
+        <div id="drawer-overlay" class="drawer-overlay"></div>
+        <aside id="drawer" class="drawer">
+            <div class="drawer-header">
+                <div>
+                    <div id="drawer-title" class="drawer-title-code">
+                        ANGLE_MAX
+                    </div>
+                    <div id="drawer-subtitle" class="drawer-subtitle">
+                        Maximum lean angle in centi-degrees
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    id="drawer-close"
+                    class="drawer-close"
+                    title="Close drawer"
+                >
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="drawer-body" class="drawer-body">
+                <!-- Populated dynamically by JS -->
+            </div>
+        </aside>
+
+        <!-- Version Comparison Modal -->
+        <div id="compare-modal-overlay" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3>
+                        <i class="fa-solid fa-code-compare"></i> Compare
+                        Parameter Versions (Diff)
+                    </h3>
+                    <button
+                        type="button"
+                        id="compare-close"
+                        class="drawer-close"
+                    >
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="compare-selectors">
+                        <div class="input-group">
+                            <label for="compare-ver-1"
+                                >Baseline Version (Version 1)</label
+                            >
+                            <div class="select-wrapper">
+                                <select
+                                    id="compare-ver-1"
+                                    class="custom-select"
+                                ></select>
+                                <i
+                                    class="fa-solid fa-chevron-down select-icon"
+                                ></i>
+                            </div>
+                        </div>
+                        <div
+                            style="font-size: 1.2rem; color: var(--accent-cyan)"
+                        >
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </div>
+                        <div class="input-group">
+                            <label for="compare-ver-2"
+                                >Target Version (Version 2)</label
+                            >
+                            <div class="select-wrapper">
+                                <select
+                                    id="compare-ver-2"
+                                    class="custom-select"
+                                ></select>
+                                <i
+                                    class="fa-solid fa-chevron-down select-icon"
+                                ></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="
+                            display: flex;
+                            gap: 12px;
+                            align-items: center;
+                            margin-top: 16px;
+                        "
+                    >
+                        <select
+                            id="compare-filter"
+                            class="custom-select"
+                            style="
+                                width: auto;
+                                padding: 6px 32px 6px 12px;
+                                font-size: 0.85rem;
+                            "
+                        >
+                            <option value="changed">
+                                Show Only Changed / Modified Values
+                            </option>
+                            <option value="all">Show All Parameters</option>
+                            <option value="added">
+                                Show Only Added Parameters
+                            </option>
+                        </select>
+                        <button
+                            type="button"
+                            id="btn-run-compare"
+                            class="btn btn-primary"
+                            style="margin-left: auto"
+                        >
+                            <i class="fa-solid fa-magnifying-glass"></i> Compare
+                            Defaults
+                        </button>
+                    </div>
+
+                    <div
+                        id="compare-results"
+                        class="compare-results"
+                        style="margin-top: 20px"
+                    >
+                        <p
+                            style="
+                                text-align: center;
+                                color: var(--text-muted);
+                                padding: 30px;
+                            "
+                        >
+                            Select two versions above and click "Compare
+                            Defaults".
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Container -->
+        <div id="toast-container" class="toast-container"></div>
+
+        <!-- Main Application Script -->
+        <script type="module" src="/src/app.js"></script>
+    </body>
+</html>
