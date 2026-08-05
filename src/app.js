@@ -579,6 +579,18 @@ function closeDetailDrawer() {
 }
 
 /**
+ * Build an export filename. Release tags are descriptive on their own;
+ * "master" isn't, so only that gets prefixed with the vehicle name.
+ */
+function buildExportFilename(suffix) {
+	const versionPart =
+		state.currentVersion === "master"
+			? `${state.currentVehicle.vehicleDir}_master`
+			: state.currentVersion;
+	return `${versionPart}_${suffix}`;
+}
+
+/**
  * Setup Event Listeners
  */
 function setupEventListeners() {
@@ -644,7 +656,7 @@ function setupEventListeners() {
 			state.currentVehicle.name,
 			state.currentVersion,
 		);
-		const filename = `${state.currentVehicle.id}_${state.currentVersion}_defaults.param`;
+		const filename = buildExportFilename("defaults.param");
 		downloadFile(content, filename, "text/plain");
 		showToast(
 			`Exported ${state.filteredParameters.length} parameters to ${filename}`,
@@ -653,7 +665,7 @@ function setupEventListeners() {
 
 	elements.btnExportCsv.addEventListener("click", () => {
 		const content = generateCsvFile(state.filteredParameters);
-		const filename = `${state.currentVehicle.id}_${state.currentVersion}_parameters.csv`;
+		const filename = buildExportFilename("parameters.csv");
 		downloadFile(content, filename, "text/csv");
 		showToast(`Exported CSV to ${filename}`);
 	});
@@ -665,7 +677,7 @@ function setupEventListeners() {
 				state.currentVehicle.name,
 				state.currentVersion,
 			);
-			const filename = `${state.currentVehicle.id}_${state.currentVersion}_parameters.json`;
+			const filename = buildExportFilename("parameters.json");
 			downloadFile(content, filename, "application/json");
 			showToast(`Exported JSON to ${filename}`);
 		});

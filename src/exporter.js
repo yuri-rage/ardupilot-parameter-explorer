@@ -30,7 +30,7 @@ export function generateParamFile(parameters, vehicleName, versionTag) {
 `;
 
 	const lines = parameters.map((p) => `${p.name},${p.defaultValue}`);
-	return header + lines.join("\n") + "\n";
+	return `${header}${lines.join("\n")}\n`;
 }
 
 /**
