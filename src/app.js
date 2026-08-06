@@ -3,24 +3,30 @@
  */
 
 import {
+	fetchGitHubTags,
+	getVehicleLogMessages,
+	getVehicleParameters,
 	PRESET_VERSIONS,
 	VEHICLES,
-	fetchGitHubTags,
-	getVehicleParameters,
 } from "./api.js";
 import {
 	downloadFile,
 	generateCsvFile,
 	generateJsonFile,
+	generateLogCsvFile,
+	generateLogJsonFile,
 	generateParamFile,
 } from "./exporter.js";
 
 // Global Application State
 const state = {
+	activeMode: "params", // "params" or "logs"
 	currentVehicle: VEHICLES[0],
 	currentVersion: "master",
 	parameters: [],
 	filteredParameters: [],
+	logMessages: [],
+	filteredLogMessages: [],
 	activeCategory: "ALL",
 	searchQuery: "",
 	currentPage: 1,
@@ -28,49 +34,139 @@ const state = {
 	availableTags: [],
 };
 
-// DOM Elements Cache
+// DOM Elements Cache (Dynamic Getters to prevent null elements on script init)
 const elements = {
-	vehicleRow: document.getElementById("vehicle-card-row"),
-	versionSelect: document.getElementById("version-select"),
-	searchInput: document.getElementById("search-input"),
-	searchClear: document.getElementById("search-clear"),
-	categoryBar: document.getElementById("category-bar"),
-	tableBody: document.getElementById("param-table-body"),
-	statsCount: document.getElementById("stats-count"),
-	loadingSpinner: document.getElementById("loading-spinner"),
-	emptyState: document.getElementById("empty-state"),
-	errorState: document.getElementById("error-state"),
-	tagStatus: document.getElementById("tag-status"),
-	pageIndicator: document.getElementById("page-indicator"),
-	btnPrevPage: document.getElementById("btn-prev-page"),
-	btnNextPage: document.getElementById("btn-next-page"),
-	pageSizeSelect: document.getElementById("page-size-select"),
+	get appHeaderTitle() {
+		return document.getElementById("app-header-title");
+	},
+	get appSubtitle() {
+		return document.getElementById("app-subtitle");
+	},
+	get modeBtnParams() {
+		return document.getElementById("mode-btn-params");
+	},
+	get modeBtnLogs() {
+		return document.getElementById("mode-btn-logs");
+	},
+
+	get vehicleRow() {
+		return document.getElementById("vehicle-card-row");
+	},
+	get versionSelectGroup() {
+		return document.getElementById("version-select-group");
+	},
+	get versionSelect() {
+		return document.getElementById("version-select");
+	},
+	get searchLabel() {
+		return document.getElementById("search-label");
+	},
+	get searchInput() {
+		return document.getElementById("search-input");
+	},
+	get searchClear() {
+		return document.getElementById("search-clear");
+	},
+	get categoryBar() {
+		return document.getElementById("category-bar");
+	},
+	get tableHead() {
+		return document.getElementById("table-head");
+	},
+	get tableBody() {
+		return document.getElementById("param-table-body");
+	},
+	get statsCount() {
+		return document.getElementById("stats-count");
+	},
+	get loadingSpinner() {
+		return document.getElementById("loading-spinner");
+	},
+	get emptyState() {
+		return document.getElementById("empty-state");
+	},
+	get errorState() {
+		return document.getElementById("error-state");
+	},
+	get tagStatus() {
+		return document.getElementById("tag-status");
+	},
+	get pageIndicator() {
+		return document.getElementById("page-indicator");
+	},
+	get btnPrevPage() {
+		return document.getElementById("btn-prev-page");
+	},
+	get btnNextPage() {
+		return document.getElementById("btn-next-page");
+	},
+	get pageSizeSelect() {
+		return document.getElementById("page-size-select");
+	},
 
 	// Exporters & Actions
-	btnExportParam: document.getElementById("btn-export-param"),
-	btnExportCsv: document.getElementById("btn-export-csv"),
-	btnExportJson: document.getElementById("btn-export-json"),
-	btnShareLink: document.getElementById("btn-share-link"),
-	btnCompare: document.getElementById("btn-compare"),
+	get btnExportParam() {
+		return document.getElementById("btn-export-param");
+	},
+	get btnExportCsv() {
+		return document.getElementById("btn-export-csv");
+	},
+	get btnExportJson() {
+		return document.getElementById("btn-export-json");
+	},
+	get btnShareLink() {
+		return document.getElementById("btn-share-link");
+	},
+	get btnCompare() {
+		return document.getElementById("btn-compare");
+	},
 
 	// Detail Drawer
-	drawerOverlay: document.getElementById("drawer-overlay"),
-	drawer: document.getElementById("drawer"),
-	drawerTitle: document.getElementById("drawer-title"),
-	drawerSubtitle: document.getElementById("drawer-subtitle"),
-	drawerBody: document.getElementById("drawer-body"),
-	drawerClose: document.getElementById("drawer-close"),
+	get drawerOverlay() {
+		return document.getElementById("drawer-overlay");
+	},
+	get drawer() {
+		return document.getElementById("drawer");
+	},
+	get drawerTitle() {
+		return document.getElementById("drawer-title");
+	},
+	get drawerSubtitle() {
+		return document.getElementById("drawer-subtitle");
+	},
+	get drawerBody() {
+		return document.getElementById("drawer-body");
+	},
+	get drawerClose() {
+		return document.getElementById("drawer-close");
+	},
 
 	// Compare Modal
-	compareModalOverlay: document.getElementById("compare-modal-overlay"),
-	compareClose: document.getElementById("compare-close"),
-	compareVer1: document.getElementById("compare-ver-1"),
-	compareVer2: document.getElementById("compare-ver-2"),
-	compareFilter: document.getElementById("compare-filter"),
-	btnRunCompare: document.getElementById("btn-run-compare"),
-	compareResults: document.getElementById("compare-results"),
+	get compareModalOverlay() {
+		return document.getElementById("compare-modal-overlay");
+	},
+	get compareClose() {
+		return document.getElementById("compare-close");
+	},
+	get compareVer1() {
+		return document.getElementById("compare-ver-1");
+	},
+	get compareVer2() {
+		return document.getElementById("compare-ver-2");
+	},
+	get compareFilter() {
+		return document.getElementById("compare-filter");
+	},
+	get btnRunCompare() {
+		return document.getElementById("btn-run-compare");
+	},
+	get compareResults() {
+		return document.getElementById("compare-results");
+	},
 
-	toastContainer: document.getElementById("toast-container"),
+	get toastContainer() {
+		return document.getElementById("toast-container");
+	},
 };
 
 // Application Initialization
@@ -82,16 +178,123 @@ document.addEventListener("DOMContentLoaded", async () => {
 	populateVersionSelect();
 	setupEventListeners();
 
+	// Global Event Delegation for Mode Switcher Buttons
+	document.addEventListener("click", (e) => {
+		const modeBtn = e.target.closest(".mode-btn");
+		if (modeBtn) {
+			const targetMode = modeBtn.getAttribute("data-mode");
+			if (targetMode) switchMode(targetMode);
+		}
+	});
+
 	// Load GitHub Tags asynchronously
 	loadTags();
 
 	// Initial Data Fetch
-	await loadParameters();
+	if (state.activeMode === "logs") {
+		await loadLogMessages();
+	} else {
+		await loadParameters();
+	}
 });
+
+/**
+ * Switch Active Mode (Parameters vs Log Messages)
+ */
+function switchMode(newMode) {
+	state.activeMode = newMode;
+	state.activeCategory = "ALL";
+	state.searchQuery = "";
+	state.currentPage = 1;
+	if (elements.searchInput) elements.searchInput.value = "";
+	if (elements.searchClear) elements.searchClear.style.display = "none";
+
+	if (newMode === "logs") {
+		if (elements.modeBtnParams)
+			elements.modeBtnParams.classList.remove("active");
+		if (elements.modeBtnLogs) elements.modeBtnLogs.classList.add("active");
+		if (elements.appHeaderTitle)
+			elements.appHeaderTitle.textContent = "Log Message Explorer";
+		if (elements.appSubtitle) {
+			elements.appSubtitle.innerHTML =
+				'Explore on-board DataFlash log message formats, data types, measurement units, and field definitions across all ArduPilot vehicles. <span class="subtitle-note"><i class="fa-solid fa-circle-info"></i> Reflects official log message documentation compiled from source.</span>';
+		}
+
+		if (elements.versionSelectGroup)
+			elements.versionSelectGroup.style.display = "flex";
+		if (elements.btnCompare) elements.btnCompare.style.display = "none";
+		if (elements.btnExportParam) elements.btnExportParam.style.display = "none";
+
+		if (elements.searchLabel)
+			elements.searchLabel.textContent = "Search Log Messages";
+		if (elements.searchInput) {
+			elements.searchInput.placeholder =
+				"Search by message (e.g. ACC, ATT, GPS), field name (e.g. TimeUS), description...";
+		}
+		const label = document.querySelector('label[for="page-size-select"]');
+		if (label) label.textContent = "Log Messages per page:";
+
+		// Table Header for Log Messages
+		if (elements.tableHead) {
+			elements.tableHead.innerHTML = `
+				<tr>
+					<th style="width: 150px">Log Message</th>
+					<th style="width: 120px">Fields</th>
+					<th style="width: 260px">Field Names</th>
+					<th>Description</th>
+					<th style="width: 80px; text-align: center">Details</th>
+				</tr>
+			`;
+		}
+
+		loadLogMessages();
+	} else {
+		if (elements.modeBtnParams) elements.modeBtnParams.classList.add("active");
+		if (elements.modeBtnLogs) elements.modeBtnLogs.classList.remove("active");
+		if (elements.appHeaderTitle)
+			elements.appHeaderTitle.textContent = "Parameter Explorer";
+		if (elements.appSubtitle) {
+			elements.appSubtitle.innerHTML =
+				'Search, inspect, compare, and export default parameter configurations across all ArduPilot vehicles and firmware releases. <span class="subtitle-note"><i class="fa-solid fa-circle-info"></i> Reflects base firmware defaults (board-specific hardware defaults may vary).</span>';
+		}
+
+		if (elements.versionSelectGroup)
+			elements.versionSelectGroup.style.display = "flex";
+		if (elements.btnCompare) elements.btnCompare.style.display = "inline-flex";
+		if (elements.btnExportParam)
+			elements.btnExportParam.style.display = "inline-flex";
+
+		if (elements.searchLabel)
+			elements.searchLabel.textContent = "Search Parameters";
+		if (elements.searchInput) {
+			elements.searchInput.placeholder =
+				"Search by parameter name (e.g. ANGLE_MAX), description, or unit...";
+		}
+		const label = document.querySelector('label[for="page-size-select"]');
+		if (label) label.textContent = "Parameters per page:";
+
+		// Table Header for Parameters
+		if (elements.tableHead) {
+			elements.tableHead.innerHTML = `
+				<tr>
+					<th style="width: 220px">Parameter Name</th>
+					<th style="width: 130px">Default Value</th>
+					<th style="width: 160px">Range</th>
+					<th style="width: 90px">Units</th>
+					<th>Description & Details</th>
+					<th style="width: 80px; text-align: center">Details</th>
+				</tr>
+			`;
+		}
+
+		loadParameters();
+	}
+}
 
 /**
  * Load dynamic GitHub tags
  */
+
 async function loadTags() {
 	try {
 		const tags = await fetchGitHubTags();
@@ -131,51 +334,59 @@ const CUSTOM_VEHICLE_ICONS = {
  */
 function renderVehicleCards() {
 	elements.vehicleRow.innerHTML = VEHICLES.map((v) => {
+		const safeName = escapeHtml(v.name);
 		const iconMarkup = CUSTOM_VEHICLE_ICONS[v.id]
 			? `<i class="vehicle-icon-custom">${CUSTOM_VEHICLE_ICONS[v.id]}</i>`
-			: `<i class="fa-solid fa-${v.icon}"></i>`;
+			: `<i class="fa-solid fa-${escapeHtml(v.icon)}"></i>`;
 		return `
     <button class="vehicle-btn ${v.id === state.currentVehicle.id ? "active" : ""}" data-id="${v.id}">
-      ${iconMarkup} ${v.name}
+      ${iconMarkup} ${safeName}
     </button>
   `;
 	}).join("");
 
 	elements.vehicleRow.querySelectorAll(".vehicle-btn").forEach((btn) => {
 		btn.addEventListener("click", (e) => {
-			const vId = e.currentTarget.getAttribute("data-id");
-			const targetVehicle = VEHICLES.find((v) => v.id === vId);
-			if (targetVehicle && targetVehicle.id !== state.currentVehicle.id) {
-				state.currentVehicle = targetVehicle;
-				state.currentVersion = "master"; // Reset to master on vehicle change
+			const id = e.currentTarget.getAttribute("data-id");
+			const v = VEHICLES.find((item) => item.id === id);
+			if (v && v.id !== state.currentVehicle.id) {
+				state.currentVehicle = v;
+				state.activeCategory = "ALL";
+				state.currentPage = 1;
 				renderVehicleCards();
 				populateVersionSelect();
-				loadParameters();
+				if (state.activeMode === "logs") {
+					loadLogMessages();
+				} else {
+					loadParameters();
+				}
 			}
 		});
 	});
 }
 
 /**
- * Sort Version Tags (master first, then SemVer newest to oldest)
+ * SemVer Tag Sorter (Newest -> Oldest)
  */
 function sortVersionTags(tags) {
 	const hasMaster = tags.includes("master");
 	const otherTags = tags.filter((t) => t !== "master");
 
 	otherTags.sort((a, b) => {
-		const parseVersion = (str) => {
-			const match = str.match(/(\d+)\.(\d+)(?:\.(\d+))?/);
-			if (!match) return [0, 0, 0];
-			return [
-				parseInt(match[1], 10) || 0,
-				parseInt(match[2], 10) || 0,
-				parseInt(match[3], 10) || 0,
-			];
+		const parseVer = (tagStr) => {
+			const match = tagStr.match(/(\d+)\.(\d+)\.(\d+)/);
+			if (match) {
+				return [
+					parseInt(match[1], 10),
+					parseInt(match[2], 10),
+					parseInt(match[3], 10),
+				];
+			}
+			return [0, 0, 0];
 		};
 
-		const vA = parseVersion(a);
-		const vB = parseVersion(b);
+		const vA = parseVer(a);
+		const vB = parseVer(b);
 
 		if (vA[0] !== vB[0]) return vB[0] - vA[0];
 		if (vA[1] !== vB[1]) return vB[1] - vA[1];
@@ -252,26 +463,70 @@ async function loadParameters() {
 }
 
 /**
- * Filter Parameters based on search query & active category
+ * Log Message Fetcher & Renderer
+ */
+async function loadLogMessages() {
+	elements.loadingSpinner.style.display = "block";
+	elements.tableBody.innerHTML = "";
+	elements.emptyState.style.display = "none";
+	if (elements.errorState) elements.errorState.style.display = "none";
+	elements.statsCount.textContent = "Loading log messages...";
+
+	try {
+		state.logMessages = await getVehicleLogMessages(
+			state.currentVehicle.id,
+			state.currentVersion,
+		);
+		applyFilters();
+		syncUrl();
+	} catch (err) {
+		console.error("Error loading log messages:", err);
+		showToast(
+			"Failed to load log message metadata. Check connection.",
+			"error",
+		);
+		if (elements.errorState) elements.errorState.style.display = "block";
+	} finally {
+		elements.loadingSpinner.style.display = "none";
+	}
+}
+
+/**
+ * Filter Items based on search query & active category
  */
 function applyFilters() {
 	const query = state.searchQuery.toLowerCase().trim();
 	const category = state.activeCategory;
 
-	state.filteredParameters = state.parameters.filter((p) => {
-		// Category match
-		const matchesCategory = category === "ALL" || p.category === category;
+	if (state.activeMode === "logs") {
+		state.filteredLogMessages = state.logMessages.filter((m) => {
+			const matchesCategory = category === "ALL" || m.category === category;
+			const matchesSearch =
+				!query ||
+				m.name.toLowerCase().includes(query) ||
+				m.description.toLowerCase().includes(query) ||
+				m.fields.some(
+					(f) =>
+						f.name.toLowerCase().includes(query) ||
+						f.type.toLowerCase().includes(query) ||
+						f.units.toLowerCase().includes(query) ||
+						f.description.toLowerCase().includes(query),
+				);
+			return matchesCategory && matchesSearch;
+		});
+	} else {
+		state.filteredParameters = state.parameters.filter((p) => {
+			const matchesCategory = category === "ALL" || p.category === category;
+			const matchesSearch =
+				!query ||
+				p.name.toLowerCase().includes(query) ||
+				p.displayName.toLowerCase().includes(query) ||
+				p.description.toLowerCase().includes(query) ||
+				p.units.toLowerCase().includes(query);
 
-		// Search query match across Name, DisplayName, Description, Units
-		const matchesSearch =
-			!query ||
-			p.name.toLowerCase().includes(query) ||
-			p.displayName.toLowerCase().includes(query) ||
-			p.description.toLowerCase().includes(query) ||
-			p.units.toLowerCase().includes(query);
-
-		return matchesCategory && matchesSearch;
-	});
+			return matchesCategory && matchesSearch;
+		});
+	}
 
 	state.currentPage = 1;
 	renderCategoriesBar();
@@ -282,10 +537,9 @@ function applyFilters() {
  * Render Category Filter Pills
  */
 function renderCategoriesBar() {
-	const categories = [
-		"ALL",
-		...new Set(state.parameters.map((p) => p.category)),
-	];
+	const source =
+		state.activeMode === "logs" ? state.logMessages : state.parameters;
+	const categories = ["ALL", ...new Set(source.map((item) => item.category))];
 
 	elements.categoryBar.innerHTML = categories
 		.map((cat) => {
@@ -310,6 +564,124 @@ function renderCategoriesBar() {
  * Render Paginated Table Rows
  */
 function renderTable() {
+	if (state.activeMode === "logs") {
+		renderLogMessagesTable();
+	} else {
+		renderParametersTable();
+	}
+}
+
+/**
+ * Render Log Messages Table
+ */
+function renderLogMessagesTable() {
+	const total = state.filteredLogMessages.length;
+	elements.statsCount.innerHTML = `Showing <strong>${total}</strong> log message formats for ${escapeHtml(state.currentVehicle.name)} (<code>${escapeHtml(state.currentVersion)}</code>)`;
+
+	if (total === 0) {
+		elements.tableBody.innerHTML = "";
+		elements.emptyState.style.display = "block";
+		elements.pageIndicator.textContent = "Page 0 of 0";
+		elements.btnPrevPage.disabled = true;
+		elements.btnNextPage.disabled = true;
+		return;
+	}
+
+	elements.emptyState.style.display = "none";
+
+	const totalPages = Math.ceil(total / state.pageSize);
+	if (state.currentPage > totalPages) state.currentPage = totalPages;
+	const startIdx = (state.currentPage - 1) * state.pageSize;
+	const pageItems = state.filteredLogMessages.slice(
+		startIdx,
+		startIdx + state.pageSize,
+	);
+
+	if (state.pageSize >= 100000) {
+		elements.pageIndicator.textContent = `Showing all ${total} log messages`;
+		elements.btnPrevPage.disabled = true;
+		elements.btnNextPage.disabled = true;
+	} else {
+		elements.pageIndicator.textContent = `Page ${state.currentPage} of ${totalPages}`;
+		elements.btnPrevPage.disabled = state.currentPage === 1;
+		elements.btnNextPage.disabled = state.currentPage === totalPages;
+	}
+
+	elements.tableBody.innerHTML = pageItems
+		.map((m) => {
+			const safeName = escapeHtml(m.name);
+			const fieldPills = m.fields
+				.slice(0, 6)
+				.map(
+					(f) =>
+						`<span class="field-pill" title="${escapeHtml(f.description || f.name)}">${escapeHtml(f.name)}</span>`,
+				)
+				.join("");
+			const moreTag =
+				m.fields.length > 6
+					? `<span class="field-pill-more">+${m.fields.length - 6} more</span>`
+					: "";
+
+			return `
+      <tr>
+        <td>
+          <span class="param-name" data-log-name="${safeName}" role="button" tabindex="0" aria-label="View log message ${safeName}">
+            <i class="fa-solid fa-receipt" style="color: var(--accent-cyan); font-size: 0.85rem; margin-right: 4px;"></i> ${highlightText(m.name, state.searchQuery)}
+          </span>
+        </td>
+        <td>
+          <span class="val-pill">${m.fieldsCount} fields</span>
+        </td>
+        <td>
+          <div class="field-pill-list">
+            ${fieldPills} ${moreTag}
+          </div>
+        </td>
+        <td>
+          <div class="param-desc">
+            <div class="param-desc-title">${highlightText(m.name, state.searchQuery)}</div>
+            <div class="param-desc-text">${highlightText(m.description, state.searchQuery)}</div>
+          </div>
+        </td>
+        <td style="text-align: center;">
+          <button class="btn btn-secondary btn-log-detail" data-name="${safeName}" style="padding: 4px 10px; font-size: 0.8rem;">
+            <i class="fa-solid fa-circle-info"></i> View
+          </button>
+        </td>
+      </tr>
+    `;
+		})
+		.join("");
+
+	// Event Listeners for Log Message Rows
+	elements.tableBody
+		.querySelectorAll(".param-name[data-log-name]")
+		.forEach((el) => {
+			const openLog = () => {
+				const name = el.getAttribute("data-log-name");
+				if (name) openLogDetailDrawer(name);
+			};
+			el.addEventListener("click", openLog);
+			el.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					openLog();
+				}
+			});
+		});
+
+	elements.tableBody.querySelectorAll(".btn-log-detail").forEach((btn) => {
+		btn.addEventListener("click", (e) => {
+			const name = e.currentTarget.getAttribute("data-name");
+			openLogDetailDrawer(name);
+		});
+	});
+}
+
+/**
+ * Render Parameters Table
+ */
+function renderParametersTable() {
 	const total = state.filteredParameters.length;
 	elements.statsCount.innerHTML = `Showing <strong>${total}</strong> parameters for ${escapeHtml(state.currentVehicle.name)} (<code>${escapeHtml(state.currentVersion)}</code>)`;
 
@@ -385,20 +757,25 @@ function renderTable() {
 		.join("");
 
 	// Attach Table Event Listeners
-	elements.tableBody.querySelectorAll(".param-name").forEach((el) => {
-		const copyName = (e) => {
-			const name = e.currentTarget.getAttribute("data-name");
-			navigator.clipboard.writeText(name);
-			showToast(`Copied "${name}" to clipboard`);
-		};
-		el.addEventListener("click", copyName);
-		el.addEventListener("keydown", (e) => {
-			if (e.key === "Enter" || e.key === " ") {
-				e.preventDefault();
-				copyName(e);
-			}
+	elements.tableBody
+		.querySelectorAll(".param-name[data-name]")
+		.forEach((el) => {
+			const copyName = () => {
+				const name = el.getAttribute("data-name");
+				if (name) {
+					navigator.clipboard.writeText(name);
+					showToast(`Copied "${name}" to clipboard`);
+				}
+			};
+
+			el.addEventListener("click", copyName);
+			el.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					copyName();
+				}
+			});
 		});
-	});
 
 	elements.tableBody.querySelectorAll(".btn-detail").forEach((btn) => {
 		btn.addEventListener("click", (e) => {
@@ -409,33 +786,161 @@ function renderTable() {
 }
 
 /**
- * Escape a value for safe insertion into HTML markup
- */
-function escapeHtml(value) {
-	const escapeChars = {
-		"&": "&amp;",
-		"<": "&lt;",
-		">": "&gt;",
-		'"': "&quot;",
-		"'": "&#39;",
-	};
-	return String(value ?? "").replace(/[&<>"']/g, (ch) => escapeChars[ch]);
-}
-
-/**
- * Highlight matched search text (escapes text first, then wraps matches)
+ * Highlight matched search text
  */
 function highlightText(text, query) {
-	const safeText = escapeHtml(text);
-	if (!query || !safeText) return safeText;
+	if (!query || !text) return escapeHtml(text || "");
 	const q = String(query).trim();
-	if (!q) return safeText;
+	if (!q) return escapeHtml(text);
 	const regex = new RegExp(`(${escapeRegex(q)})`, "gi");
-	return safeText.replace(regex, '<mark class="search-highlight">$1</mark>');
+	const parts = String(text).split(regex);
+	return parts
+		.map((part) =>
+			part.toLowerCase() === q.toLowerCase()
+				? `<mark class="search-highlight">${escapeHtml(part)}</mark>`
+				: escapeHtml(part),
+		)
+		.join("");
 }
 
 function escapeRegex(string) {
 	return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeHtml(str) {
+	if (str === null || str === undefined) return "";
+	return String(str)
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#039;");
+}
+
+/**
+ * Open Log Message Detail Drawer
+ */
+function openLogDetailDrawer(logName) {
+	const m = state.logMessages.find((item) => item.name === logName);
+	if (!m) return;
+
+	elements.drawerTitle.textContent = m.name;
+	elements.drawerSubtitle.textContent = m.description || m.name;
+
+	const fieldsHtml = m.fields
+		.map((f) => {
+			const safeFName = escapeHtml(f.name);
+			const safeFType = escapeHtml(f.type);
+			const safeFUnits = escapeHtml(f.units);
+			const safeFDesc = escapeHtml(f.description);
+
+			let extraDetails = "";
+			if (f.values) {
+				extraDetails += `
+          <div style="margin-top: 6px;">
+            <table class="enum-table" style="margin-top: 4px; font-size: 0.78rem;">
+              <tbody>
+                ${Object.entries(f.values)
+									.map(
+										([code, label]) =>
+											`<tr><td style="font-family: var(--font-mono); font-weight:700; color:#fbbf24; width: 40px;">${escapeHtml(code)}</td><td>${escapeHtml(label)}</td></tr>`,
+									)
+									.join("")}
+              </tbody>
+            </table>
+          </div>
+        `;
+			}
+			if (f.bitmask) {
+				extraDetails += `
+          <div style="margin-top: 6px;">
+            <table class="bitmask-table" style="margin-top: 4px; font-size: 0.78rem;">
+              <tbody>
+                ${Object.entries(f.bitmask)
+									.map(
+										([flag, bit]) =>
+											`<tr><td style="font-family: var(--font-mono); font-weight:700; color:var(--accent-green-bright); width: 80px;">${escapeHtml(flag)}</td><td>Bit ${escapeHtml(bit)}</td></tr>`,
+									)
+									.join("")}
+              </tbody>
+            </table>
+          </div>
+        `;
+			}
+
+			return `
+        <tr>
+          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--text-primary);">${safeFName}</td>
+          <td><span class="type-tag">${safeFType}</span></td>
+          <td>${f.units ? `<span class="unit-tag">${safeFUnits}</span>` : '<span style="color: var(--text-muted);">-</span>'}</td>
+          <td>
+            <div style="color: var(--text-secondary);">${safeFDesc || "-"}</div>
+            ${extraDetails}
+          </td>
+        </tr>
+      `;
+		})
+		.join("");
+
+	let bodyHtml = `
+    <div class="detail-section">
+      <h4>Log Format Overview</h4>
+      <div class="detail-val-box">
+        <div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">MESSAGE TYPE</div>
+          <div class="val-pill" style="font-size: 1.1rem; padding: 6px 14px; margin-top: 4px;">${safeName}</div>
+        </div>
+        <div style="margin-left: 16px;">
+          <div style="font-size: 0.75rem; color: var(--text-muted);">FIELDS COUNT</div>
+          <div class="unit-tag" style="font-size: 0.95rem; margin-top: 4px;">${m.fieldsCount} fields</div>
+        </div>
+        <div style="margin-left: auto;">
+          <div style="font-size: 0.75rem; color: var(--text-muted);">CATEGORY</div>
+          <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); margin-top: 4px;">${safeCategory}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h4>Description</h4>
+      <p style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5; background: var(--bg-primary); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+        ${safeDesc}
+      </p>
+    </div>
+
+    <div class="detail-section">
+      <h4>Fields Specification (${m.fieldsCount})</h4>
+      <div style="background: var(--bg-primary); border-radius: var(--radius-md); border: 1px solid var(--border-color); overflow: hidden;">
+        <table class="log-fields-table">
+          <thead>
+            <tr>
+              <th style="width: 110px;">Field</th>
+              <th style="width: 90px;">Type</th>
+              <th style="width: 80px;">Units</th>
+              <th>Description & Values</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${fieldsHtml}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+	if (m.docUrl) {
+		bodyHtml += `
+      <div class="detail-section" style="margin-top: 30px;">
+        <a href="${escapeHtml(m.docUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width: 100%; justify-content: center;">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Official ArduPilot Documentation
+        </a>
+      </div>
+    `;
+	}
+
+	elements.drawerBody.innerHTML = bodyHtml;
+	elements.drawerOverlay.classList.add("active");
+	elements.drawer.classList.add("active");
 }
 
 /**
@@ -450,44 +955,47 @@ function openDetailDrawer(paramName) {
 
 	let bodyHtml = `
     <div class="detail-section">
-      <h4 class="detail-section-title">Default Value</h4>
+      <h4>Default Value</h4>
       <div class="detail-val-box">
         <div>
-          <div class="val-pill" style="font-size: 1.1rem; padding: 4px 14px;">${escapeHtml(p.defaultValue)}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">DEFAULT VALUE</div>
+          <div class="val-pill" style="font-size: 1.1rem; padding: 6px 14px; margin-top: 4px;">${escapeHtml(p.defaultValue)}</div>
         </div>
         ${
 					p.units
 						? `
-        <div>
-          <div class="detail-field-label">Units</div>
-          <div class="unit-tag" style="font-size: 0.95rem;">${escapeHtml(p.units)}</div>
+        <div style="margin-left: 16px;">
+          <div style="font-size: 0.75rem; color: var(--text-muted);">UNITS</div>
+          <div class="unit-tag" style="font-size: 0.95rem; margin-top: 4px;">${escapeHtml(p.units)}</div>
         </div>`
 						: ""
 				}
         <div style="margin-left: auto;">
-          <div class="detail-field-label">Group / Category</div>
-          <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(p.category)}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">GROUP / CATEGORY</div>
+          <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); margin-top: 4px;">${safeCategory}</div>
         </div>
       </div>
     </div>
 
     <div class="detail-section">
-      <h4 class="detail-section-title">Full Description</h4>
+      <h4>Full Description</h4>
       <p style="font-size: 0.95rem; color: var(--text-secondary); line-height: 1.5; background: var(--bg-primary); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-        ${escapeHtml(p.description)}
+        ${safeDesc}
       </p>
     </div>
   `;
 
 	// Range meter
 	if (p.range) {
+		const safeMin = escapeHtml(p.range.min);
+		const safeMax = escapeHtml(p.range.max);
 		bodyHtml += `
       <div class="detail-section">
-        <h4 class="detail-section-title">Valid Value Range</h4>
+        <h4>Valid Value Range</h4>
         <div style="background: var(--bg-primary); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
           <div style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px;">
-            <span>MIN: ${escapeHtml(p.range.min)}</span>
-            <span>MAX: ${escapeHtml(p.range.max)}</span>
+            <span>MIN: ${safeMin}</span>
+            <span>MAX: ${safeMax}</span>
           </div>
           <div style="height: 8px; background: var(--bg-secondary); border-radius: 4px; overflow: hidden; position: relative;">
             <div style="position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent-green-bright), var(--accent-blue)); border-radius: 4px;"></div>
@@ -501,21 +1009,26 @@ function openDetailDrawer(paramName) {
 	if (p.bitmask) {
 		bodyHtml += `
       <div class="detail-section">
-        <h4 class="detail-section-title">Bitmask Field Definitions</h4>
+        <h4>Bitmask Field Definitions</h4>
         <table class="bitmask-table">
           <thead>
             <tr><th>Bit</th><th>Bitmask Flag Name</th></tr>
           </thead>
           <tbody>
             ${Object.entries(p.bitmask)
-							.map(
-								([bit, desc]) => `
+							.map(([bit, desc]) => {
+								const bitNum = parseInt(bit, 10);
+								const bitVal =
+									!Number.isNaN(bitNum) && bitNum >= 0 && bitNum < 31
+										? `(${1 << bitNum})`
+										: "";
+								return `
               <tr>
-                <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-green-bright);">Bit ${escapeHtml(bit)} (${1 << bit})</td>
+                <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-green-bright);">Bit ${escapeHtml(bit)} ${bitVal}</td>
                 <td>${escapeHtml(desc)}</td>
               </tr>
-            `,
-							)
+            `;
+							})
 							.join("")}
           </tbody>
         </table>
@@ -527,7 +1040,7 @@ function openDetailDrawer(paramName) {
 	if (p.options) {
 		bodyHtml += `
       <div class="detail-section">
-        <h4 class="detail-section-title">Value Options / Enum Meanings</h4>
+        <h4>Value Options / Enum Meanings</h4>
         <table class="enum-table">
           <thead>
             <tr><th>Value</th><th>Meaning / Mode</th></tr>
@@ -562,7 +1075,7 @@ function openDetailDrawer(paramName) {
 	const docAnchor = encodeURIComponent(p.name.toLowerCase());
 	bodyHtml += `
     <div class="detail-section" style="margin-top: 30px;">
-      <a href="https://ardupilot.org/${docVehicle}/docs/parameters.html#${docAnchor}" target="_blank" class="btn btn-primary" style="width: 100%; justify-content: center;">
+      <a href="https://ardupilot.org/${docVehicle}/docs/parameters.html#${docAnchor}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="width: 100%; justify-content: center;">
         <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Official ArduPilot Documentation
       </a>
     </div>
@@ -594,10 +1107,24 @@ function buildExportFilename(suffix) {
  * Setup Event Listeners
  */
 function setupEventListeners() {
+	// Mode Toggle Buttons
+	if (elements.modeBtnParams) {
+		elements.modeBtnParams.addEventListener("click", () =>
+			switchMode("params"),
+		);
+	}
+	if (elements.modeBtnLogs) {
+		elements.modeBtnLogs.addEventListener("click", () => switchMode("logs"));
+	}
+
 	// Version Select Change
 	elements.versionSelect.addEventListener("change", (e) => {
 		state.currentVersion = e.target.value;
-		loadParameters();
+		if (state.activeMode === "logs") {
+			loadLogMessages();
+		} else {
+			loadParameters();
+		}
 	});
 
 	// Search Input with Debounce
@@ -625,9 +1152,11 @@ function setupEventListeners() {
 	});
 
 	elements.btnNextPage.addEventListener("click", () => {
-		const totalPages = Math.ceil(
-			state.filteredParameters.length / state.pageSize,
-		);
+		const total =
+			state.activeMode === "logs"
+				? state.filteredLogMessages.length
+				: state.filteredParameters.length;
+		const totalPages = Math.ceil(total / state.pageSize);
 		if (state.currentPage < totalPages) {
 			state.currentPage++;
 			renderTable();
@@ -664,22 +1193,43 @@ function setupEventListeners() {
 	});
 
 	elements.btnExportCsv.addEventListener("click", () => {
-		const content = generateCsvFile(state.filteredParameters);
-		const filename = buildExportFilename("parameters.csv");
-		downloadFile(content, filename, "text/csv");
-		showToast(`Exported CSV to ${filename}`);
+		if (state.activeMode === "logs") {
+			const content = generateLogCsvFile(state.filteredLogMessages);
+			const filename = `${state.currentVehicle.vehicleDir}_log_messages.csv`;
+			downloadFile(content, filename, "text/csv");
+			showToast(
+				`Exported ${state.filteredLogMessages.length} log messages to ${filename}`,
+			);
+		} else {
+			const content = generateCsvFile(state.filteredParameters);
+			const filename = buildExportFilename("parameters.csv");
+			downloadFile(content, filename, "text/csv");
+			showToast(`Exported CSV to ${filename}`);
+		}
 	});
 
 	if (elements.btnExportJson) {
 		elements.btnExportJson.addEventListener("click", () => {
-			const content = generateJsonFile(
-				state.filteredParameters,
-				state.currentVehicle.name,
-				state.currentVersion,
-			);
-			const filename = buildExportFilename("parameters.json");
-			downloadFile(content, filename, "application/json");
-			showToast(`Exported JSON to ${filename}`);
+			if (state.activeMode === "logs") {
+				const content = generateLogJsonFile(
+					state.filteredLogMessages,
+					state.currentVehicle.name,
+				);
+				const filename = `${state.currentVehicle.vehicleDir}_log_messages.json`;
+				downloadFile(content, filename, "application/json");
+				showToast(
+					`Exported ${state.filteredLogMessages.length} log messages to ${filename}`,
+				);
+			} else {
+				const content = generateJsonFile(
+					state.filteredParameters,
+					state.currentVehicle.name,
+					state.currentVersion,
+				);
+				const filename = buildExportFilename("parameters.json");
+				downloadFile(content, filename, "application/json");
+				showToast(`Exported JSON to ${filename}`);
+			}
 		});
 	}
 
@@ -836,10 +1386,15 @@ async function runVersionComparison() {
 }
 
 /**
- * URL State Synchronization
+ * URL State Synchronization & Browser Tab Title Update
  */
 function syncUrl() {
 	const url = new URL(window.location);
+	if (state.activeMode && state.activeMode !== "params") {
+		url.searchParams.set("mode", state.activeMode);
+	} else {
+		url.searchParams.delete("mode");
+	}
 	url.searchParams.set("vehicle", state.currentVehicle.id);
 	url.searchParams.set("version", state.currentVersion);
 	if (state.searchQuery) url.searchParams.set("search", state.searchQuery);
@@ -852,6 +1407,16 @@ function syncUrl() {
 	else if (state.pageSize >= 100000) url.searchParams.set("pageSize", "all");
 	else url.searchParams.delete("pageSize");
 	window.history.replaceState({}, "", url);
+
+	// Dynamic Browser Tab Title: <version> - Parameters or <version> - Log Messages
+	// When "master" is selected, preface with vehicle type (e.g. "Copter master - Parameters")
+	const modeLabel = state.activeMode === "logs" ? "Log Messages" : "Parameters";
+	const vDir = state.currentVehicle.vehicleDir || "Copter";
+	const verStr =
+		state.currentVersion === "master" || !state.currentVersion
+			? `${vDir} master`
+			: state.currentVersion;
+	document.title = `${verStr} - ${modeLabel}`;
 }
 
 // ArduPilot release tags & "master" only ever contain this restricted charset
@@ -860,10 +1425,16 @@ const CATEGORY_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
 
 function setupUrlParams() {
 	const params = new URLSearchParams(window.location.search);
+	const mode = params.get("mode");
 	const vehicleId = params.get("vehicle");
 	const version = params.get("version");
 	const search = params.get("search");
 	const pageSizeParam = params.get("pageSize") || params.get("limit");
+
+	if (mode === "logs") {
+		state.activeMode = "logs";
+		switchMode("logs");
+	}
 
 	if (vehicleId) {
 		const v = VEHICLES.find(

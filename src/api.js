@@ -134,7 +134,7 @@ export const PRESET_VERSIONS = {
 	Blimp: ["master", "Blimp-4.5.0", "Blimp-4.3.0"],
 };
 
-const CACHE_PREFIX = "ap_dyn_v34_";
+const CACHE_PREFIX = "ap_dyn_v39_";
 
 /**
  * Maps our vehicle ID + GitHub tag to the autotest versioned URL path.
@@ -1217,4 +1217,423 @@ export function getParameterCategory(paramName) {
 	};
 
 	return categoryMap[prefix] || "General System";
+}
+
+/**
+ * Categorize Log Message based on message name
+ */
+export function getLogCategory(messageName) {
+	if (!messageName) return "General System";
+	const name = messageName.toUpperCase();
+
+	if (
+		/^(ACC|GYR|BARO|BAR\d|MAG|MAG\d|IMU|IMU\d|RNGFND|RFND|OF|ARSP|AERS|AERG|BARD|GRAW|SENS|OVT)$/.test(
+			name,
+		) ||
+		name.includes("BARO") ||
+		name.includes("IMU") ||
+		name.includes("MAG")
+	) {
+		return "IMU & Sensors";
+	}
+	if (
+		/^(ATT|POS|PSC|XKF\d|NKF\d|AHR2|SIM|AERN|TERR|RALY|WP|NTUN|DMS|ORGN|GPD|POSZ|POSX)$/.test(
+			name,
+		) ||
+		name.startsWith("EKF") ||
+		name.startsWith("XKF") ||
+		name.startsWith("NKF")
+	) {
+		return "EKF & Navigation";
+	}
+	if (
+		/^(BAT|BATT|POWR|MOTB|BCL|BCL2|MCU|PWR|PM|BAT2)$/.test(name) ||
+		name.startsWith("BAT") ||
+		name.startsWith("POWR")
+	) {
+		return "Battery & Power";
+	}
+	if (
+		/^(RCIN|RCOUT|RCI2|RAD|AUXF|SWT|RCO2|RCO3|MAV|MAVC|RADIO)$/.test(name) ||
+		name.startsWith("RC") ||
+		name.startsWith("MAV")
+	) {
+		return "Radio & Controls";
+	}
+	if (/^(MODE|CMD|MIS|AUTO|SRTL|EV)$/.test(name)) {
+		return "Flight Modes & Missions";
+	}
+	if (
+		/^(ARM|ERR|EV|PM|VER|MSG|STAK|FILE|DSF|FMT|UNIT|MULT|RTC|FTN|PCOU)$/.test(
+			name,
+		)
+	) {
+		return "System & Events";
+	}
+	if (
+		/^(MOT|SRVO|ESC|ESCS|SPOL|WENC|WINC)$/.test(name) ||
+		name.startsWith("MOT") ||
+		name.startsWith("ESC")
+	) {
+		return "Motors & Actuators";
+	}
+
+	return "General System";
+}
+
+/**
+ * Parse LogMessages.xml string using DOMParser with regex fallback
+ */
+function parseLogMessagesXml(xmlText) {
+	if (!xmlText) return [];
+
+	if (typeof DOMParser !== "undefined") {
+		try {
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(xmlText, "application/xml");
+			if (!doc.querySelector("parsererror")) {
+				const resultList = [];
+				doc.querySelectorAll("logformat").forEach((format) => {
+					const name = format.getAttribute("name");
+					if (!name) return;
+
+					const descEl = format.querySelector(":scope > description");
+					const description = descEl
+						? descEl.textContent.trim()
+						: "ArduPilot on-board dataflash log message.";
+
+					const urlEl = format.querySelector(":scope > url");
+					const docUrl = urlEl ? urlEl.textContent.trim() : "";
+
+					const fields = [];
+					const fieldsEl = format.querySelector("fields");
+					if (fieldsEl) {
+						fieldsEl.querySelectorAll("field").forEach((field) => {
+							const fName = field.getAttribute("name") || "";
+							const fUnits = field.getAttribute("units") || "";
+							const fType = field.getAttribute("type") || "";
+
+							const fDescEl = field.querySelector("description");
+							const fDesc = fDescEl ? fDescEl.textContent.trim() : "";
+
+							const bitmask = {};
+							field.querySelectorAll("bit").forEach((bit) => {
+								bitmask[bit.getAttribute("name") || bit.textContent.trim()] =
+									bit.textContent.trim();
+							});
+
+							const values = {};
+							field.querySelectorAll("value").forEach((val) => {
+								values[val.getAttribute("code")] = val.textContent.trim();
+							});
+
+							fields.push({
+								name: fName,
+								units: fUnits,
+								type: fType,
+								description: fDesc,
+								bitmask: Object.keys(bitmask).length ? bitmask : null,
+								values: Object.keys(values).length ? values : null,
+							});
+						});
+					}
+
+					resultList.push({
+						name,
+						description,
+						docUrl,
+						category: getLogCategory(name),
+						fields,
+						fieldsCount: fields.length,
+					});
+				});
+				return resultList;
+			}
+		} catch (e) {
+			console.warn("DOMParser failed, falling back to regex parser:", e);
+		}
+	}
+
+	// Regex fallback parser (works in Node & edge environments)
+	const resultList = [];
+	const logformatRegex = /<logformat name="([^"]+)">([\s\S]*?)<\/logformat>/g;
+	for (const match of xmlText.matchAll(logformatRegex)) {
+		const name = match[1];
+		const body = match[2];
+
+		const descMatch = body.match(/<description>([\s\S]*?)<\/description>/);
+		const description = descMatch
+			? descMatch[1].trim()
+			: "ArduPilot on-board dataflash log message.";
+
+		const urlMatch = body.match(/<url>([\s\S]*?)<\/url>/);
+		const docUrl = urlMatch ? urlMatch[1].trim() : "";
+
+		const fields = [];
+		const fieldRegex =
+			/<field name="([^"]+)" units="([^"]*)" type="([^"]*)">([\s\S]*?)<\/field>/g;
+		for (const fMatch of body.matchAll(fieldRegex)) {
+			const fName = fMatch[1];
+			const fUnits = fMatch[2];
+			const fType = fMatch[3];
+			const fBody = fMatch[4];
+
+			const fDescMatch = fBody.match(/<description>([\s\S]*?)<\/description>/);
+			const fDesc = fDescMatch ? fDescMatch[1].trim() : "";
+
+			const bitmask = {};
+			const bitRegex = /<bit name="([^"]+)">(\d+)<\/bit>/g;
+			for (const bMatch of fBody.matchAll(bitRegex)) {
+				bitmask[bMatch[2]] = bMatch[1];
+			}
+
+			const values = {};
+			const valRegex = /<value code="([^"]+)">([\s\S]*?)<\/value>/g;
+			for (const vMatch of fBody.matchAll(valRegex)) {
+				values[vMatch[1]] = vMatch[2].trim();
+			}
+
+			fields.push({
+				name: fName,
+				units: fUnits,
+				type: fType,
+				description: fDesc,
+				bitmask: Object.keys(bitmask).length ? bitmask : null,
+				values: Object.keys(values).length ? values : null,
+			});
+		}
+
+		resultList.push({
+			name,
+			description,
+			docUrl,
+			category: getLogCategory(name),
+			fields,
+			fieldsCount: fields.length,
+		});
+	}
+	return resultList;
+}
+
+/**
+ * Generic C++ Source Log Scraper:
+ * Scrapes inline Log_Write / Write calls and struct LogStructure declarations
+ * from GitHub C++ files for a specific version tag without hardcoded handlers.
+ */
+async function scrapeLogMessagesFromSource(vehicleId, versionTag) {
+	const vehicleObj = VEHICLES.find((v) => v.id === vehicleId) || VEHICLES[0];
+	const vDir = vehicleObj.vehicleDir;
+	const tag = versionTag;
+
+	const formatTypeMap = {
+		a: { type: "int16_t[32]", units: "" },
+		b: { type: "int8_t", units: "" },
+		B: { type: "uint8_t", units: "" },
+		h: { type: "int16_t", units: "" },
+		H: { type: "uint16_t", units: "" },
+		i: { type: "int32_t", units: "" },
+		I: { type: "uint32_t", units: "" },
+		f: { type: "float", units: "" },
+		d: { type: "double", units: "" },
+		q: { type: "int64_t", units: "" },
+		Q: { type: "uint64_t", units: "μs" },
+		c: { type: "int16_t", units: "c" },
+		C: { type: "uint16_t", units: "c" },
+		e: { type: "int32_t", units: "c" },
+		E: { type: "uint32_t", units: "c" },
+		L: { type: "int32_t", units: "deg * 1e7" },
+		n: { type: "char[4]", units: "" },
+		N: { type: "char[16]", units: "" },
+		Z: { type: "char[64]", units: "" },
+		M: { type: "uint8_t", units: "" },
+	};
+	const paths = [
+		`${vDir}/Log.cpp`,
+		`APMrover2/Log.cpp`,
+		`${vDir}/${vDir}.cpp`,
+		`${vDir}/Attitude.cpp`,
+		`${vDir}/sensors.cpp`,
+		`libraries/AP_Logger/LogStructure.h`,
+		`libraries/DataFlash/LogStructure.h`,
+		`libraries/DataFlash/DataFlash.cpp`,
+		`libraries/AC_AttitudeControl/ControlMonitor.cpp`,
+		`libraries/AC_AttitudeControl/AC_AttitudeControl_Logging.cpp`,
+		`libraries/AC_AttitudeControl/AC_AttitudeControl.cpp`,
+		`libraries/AC_AttitudeControl/AC_PosControl.cpp`,
+		`libraries/AP_Tuning/AP_Tuning.cpp`,
+		`libraries/AP_NavEKF3/AP_NavEKF3_Logging.cpp`,
+		`libraries/AP_Compass/AP_Compass_Logging.cpp`,
+	];
+
+	const fetchText = async (path) => {
+		try {
+			const res = await fetch(
+				`https://raw.githubusercontent.com/ArduPilot/ardupilot/${tag}/${path}`,
+			);
+			return res.ok ? await res.text() : "";
+		} catch {
+			return "";
+		}
+	};
+
+	const texts = await Promise.all(paths.map(fetchText));
+	const scrapedMap = new Map();
+
+	const parseFields = (fieldNamesStr, fmtStr) => {
+		const names = fieldNamesStr
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+		const fmts = (fmtStr || "").split("");
+		return names.map((fName, idx) => {
+			const char = fmts[idx] || "f";
+			const info = formatTypeMap[char] || { type: "float", units: "" };
+			const isTime = fName.toLowerCase().includes("time");
+			return {
+				name: fName,
+				units: isTime ? "μs" : info.units,
+				type: info.type,
+				description: isTime
+					? "Time since system startup"
+					: `${fName} field (${info.type})`,
+			};
+		});
+	};
+
+	texts.forEach((text) => {
+		if (!text) return;
+
+		// Pattern 1: Inline Log_Write / Write / WriteStreaming calls
+		const logWriteRegex =
+			/(?:Log_Write|\.Write|\.WriteStreaming)\s*\(\s*"([A-Z0-9_]{2,8})"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"/gs;
+		for (const m of text.matchAll(logWriteRegex)) {
+			const name = m[1];
+			const fieldNamesStr = m[2];
+			const fmtStr = m[3];
+			const fields = parseFields(fieldNamesStr, fmtStr);
+
+			scrapedMap.set(name, {
+				name,
+				description: `On-board DataFlash log message format ${name} compiled from C++ source.`,
+				docUrl: "",
+				category: getLogCategory(name),
+				fields,
+				fieldsCount: fields.length,
+			});
+		}
+
+		// Pattern 2: struct LogStructure declarations { LOG_..._MSG, sizeof(...), "NAME", "FmtStr", "Labels", ... }
+		const logStructRegex =
+			/{\s*LOG_[A-Z0-9_]+\s*,\s*(?:sizeof\([^)]+\)|[0-9]+)\s*,\s*"([A-Z0-9_]{2,8})"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"/g;
+		for (const m of text.matchAll(logStructRegex)) {
+			const name = m[1];
+			const fmtStr = m[2];
+			const fieldNamesStr = m[3];
+			const fields = parseFields(fieldNamesStr, fmtStr);
+
+			if (!scrapedMap.has(name)) {
+				scrapedMap.set(name, {
+					name,
+					description: `On-board DataFlash log message format ${name} compiled from C++ source structure.`,
+					docUrl: "",
+					category: getLogCategory(name),
+					fields,
+					fieldsCount: fields.length,
+				});
+			}
+		}
+
+		// Pattern 3: @LoggerMessage: NAME C++ doc comments
+		const docBlockRegex =
+			/\/\/\s*@LoggerMessage\s*:\s*([A-Z0-9_,]+)([\s\S]*?)(?=\/\/\s*@LoggerMessage|struct|\n\s*\n|$)/g;
+		for (const m of text.matchAll(docBlockRegex)) {
+			const names = m[1].split(",").map((s) => s.trim());
+			const block = m[2];
+
+			const descMatch = block.match(/\/\/\s*@Description\s*:\s*(.*)/);
+			const description = descMatch ? descMatch[1].trim() : "";
+
+			const urlMatch = block.match(/\/\/\s*@URL\s*:\s*(.*)/);
+			const docUrl = urlMatch ? urlMatch[1].trim() : "";
+
+			const fieldDescs = {};
+			const fieldRegex = /\/\/\s*@Field\s*:\s*([A-Z0-9_]+)\s*:\s*(.*)/g;
+			for (const fMatch of block.matchAll(fieldRegex)) {
+				fieldDescs[fMatch[1]] = fMatch[2].trim();
+			}
+
+			names.forEach((name) => {
+				if (scrapedMap.has(name)) {
+					const existing = scrapedMap.get(name);
+					if (description) existing.description = description;
+					if (docUrl) existing.docUrl = docUrl;
+					existing.fields.forEach((f) => {
+						if (fieldDescs[f.name]) f.description = fieldDescs[f.name];
+					});
+				}
+			});
+		}
+	});
+
+	return Array.from(scrapedMap.values());
+}
+
+/**
+ * Fetch and Parse Log Messages Metadata for a vehicle type and version tag
+ */
+export async function getVehicleLogMessages(vehicleId, versionTag = "master") {
+	const vehicleFolderMap = {
+		ArduCopter: "Copter",
+		ArduPlane: "Plane",
+		APMrover2: "Rover",
+		AntennaTracker: "Tracker",
+		ArduSub: "Sub",
+		Blimp: "Blimp",
+	};
+
+	const folder = vehicleFolderMap[vehicleId] || "Copter";
+	const cacheKey = `${CACHE_PREFIX}log_messages_${folder}_${versionTag}`;
+
+	if (isStorageAvailable()) {
+		const cached = localStorage.getItem(cacheKey);
+		if (cached) {
+			try {
+				return JSON.parse(cached);
+			} catch {
+				localStorage.removeItem(cacheKey);
+			}
+		}
+	}
+
+	const url = `https://autotest.ardupilot.org/LogMessages/${folder}/LogMessages.xml`;
+	const res = await fetch(url);
+	if (!res.ok) {
+		throw new Error(
+			`Failed to fetch LogMessages.xml for ${folder} (${res.status})`,
+		);
+	}
+
+	const xmlText = await res.text();
+	const baseLogs = parseLogMessagesXml(xmlText);
+	const scrapedLogs = await scrapeLogMessagesFromSource(vehicleId, versionTag);
+
+	const logMap = new Map(baseLogs.map((l) => [l.name, l]));
+	scrapedLogs.forEach((sLog) => {
+		if (!logMap.has(sLog.name)) {
+			logMap.set(sLog.name, sLog);
+		}
+	});
+
+	const resultList = Array.from(logMap.values());
+	resultList.sort((a, b) => a.name.localeCompare(b.name));
+
+	if (isStorageAvailable()) {
+		try {
+			localStorage.setItem(cacheKey, JSON.stringify(resultList));
+		} catch {
+			console.warn("LocalStorage full, skipping log cache save");
+		}
+	}
+
+	return resultList;
 }

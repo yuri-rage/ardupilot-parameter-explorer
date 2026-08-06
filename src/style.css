@@ -145,29 +145,89 @@ body {
 
 .header-badges {
 	display: flex;
-	gap: 10px;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 6px;
+}
+
+.github-link-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 9px;
+	border-radius: var(--radius-full);
+	font-size: 0.72rem;
+	font-weight: 500;
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+	text-decoration: none;
+	transition: all 0.2s ease;
+	white-space: nowrap;
+}
+
+.github-link-pill:hover {
+	color: #ffffff;
+	background: rgba(255, 255, 255, 0.12);
+	border-color: rgba(255, 255, 255, 0.25);
+	transform: translateY(-1px);
 }
 
 .badge {
 	display: inline-flex;
 	align-items: center;
-	gap: 8px;
-	padding: 6px 14px;
+	gap: 6px;
+	padding: 3px 9px;
 	border-radius: var(--radius-full);
-	font-size: 0.82rem;
-	font-weight: 600;
+	font-size: 0.72rem;
+	font-weight: 500;
 	background: var(--bg-tertiary);
 	border: 1px solid var(--border-color);
 	color: var(--text-secondary);
+	white-space: nowrap;
 }
 
 .badge-pulse {
-	width: 8px;
-	height: 8px;
+	width: 6px;
+	height: 6px;
+	min-width: 6px;
+	min-height: 6px;
 	border-radius: 50%;
+	flex-shrink: 0;
 	background: var(--accent-cyan);
-	box-shadow: 0 0 10px var(--accent-cyan);
+	box-shadow: 0 0 6px var(--accent-cyan);
 	animation: pulse 2s infinite;
+}
+
+.app-footer {
+	margin-top: 40px;
+	padding: 20px 16px 12px;
+	border-top: 1px solid var(--border-color);
+	font-size: 0.82rem;
+	color: var(--text-muted);
+}
+
+.footer-content {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 0 10px;
+}
+
+.footer-github-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--text-secondary);
+	text-decoration: none;
+	font-weight: 500;
+	transition: color 0.2s ease;
+}
+
+.footer-github-link:hover {
+	color: var(--accent-cyan-bright);
 }
 
 @keyframes pulse {
@@ -964,4 +1024,116 @@ span.search-highlight {
 		transform: translateY(0);
 		opacity: 1;
 	}
+}
+
+/* Mode Switcher Toggle Bar */
+.mode-toggle-bar {
+	display: inline-flex;
+	align-items: center;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-full);
+	padding: 3.5px;
+	gap: 3px;
+}
+
+.mode-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 6.5px 15px;
+	border-radius: var(--radius-full);
+	font-size: 0.84rem;
+	font-weight: 600;
+	color: var(--text-secondary);
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	outline: none;
+	white-space: nowrap;
+}
+
+.mode-btn:hover {
+	color: var(--text-primary);
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.mode-btn.active {
+	background: linear-gradient(
+		135deg,
+		var(--accent-cyan) 0%,
+		var(--accent-cyan-dark) 100%
+	);
+	color: #ffffff;
+	font-weight: 700;
+	box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
+/* Log Message Table & Drawer Elements */
+.type-tag {
+	display: inline-block;
+	padding: 2px 7px;
+	background: rgba(56, 189, 248, 0.12);
+	border: 1px solid rgba(56, 189, 248, 0.25);
+	border-radius: var(--radius-sm);
+	font-size: 0.76rem;
+	font-weight: 600;
+	font-family: var(--font-mono);
+	color: var(--accent-cyan-bright);
+}
+
+.field-pill-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	max-width: 500px;
+}
+
+.field-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	background: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 4px;
+	font-size: 0.78rem;
+	font-family: var(--font-mono);
+	color: var(--text-primary);
+}
+
+.field-pill-more {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	padding: 3px 6px;
+}
+
+.log-fields-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 0.88rem;
+}
+
+.log-fields-table th {
+	background: var(--bg-card);
+	color: var(--text-muted);
+	font-weight: 600;
+	text-transform: uppercase;
+	font-size: 0.74rem;
+	letter-spacing: 0.04em;
+	padding: 10px 14px;
+	border-bottom: 1px solid var(--border-color);
+	text-align: left;
+}
+
+.log-fields-table td {
+	padding: 12px 14px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	vertical-align: top;
+}
+
+.log-fields-table tr:last-child td {
+	border-bottom: none;
 }

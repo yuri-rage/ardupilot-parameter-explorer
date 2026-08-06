@@ -64,9 +64,9 @@
                                 class="brand-logo"
                             />
                         </a>
-                        <h1>Parameter Explorer</h1>
+                        <h1 id="app-header-title">Parameter Explorer</h1>
                     </div>
-                    <p class="subtitle">
+                    <p class="subtitle" id="app-subtitle">
                         Search, inspect, compare, and export default parameter
                         configurations across all ArduPilot vehicles and
                         firmware releases.
@@ -79,10 +79,37 @@
                 </div>
 
                 <div class="header-badges">
+                    <div class="mode-toggle-bar">
+                        <button
+                            type="button"
+                            id="mode-btn-params"
+                            class="mode-btn active"
+                            data-mode="params"
+                        >
+                            <i class="fa-solid fa-sliders"></i> Parameters
+                        </button>
+                        <button
+                            type="button"
+                            id="mode-btn-logs"
+                            class="mode-btn"
+                            data-mode="logs"
+                        >
+                            <i class="fa-solid fa-receipt"></i> Log Messages
+                        </button>
+                    </div>
                     <div class="badge">
                         <span class="badge-pulse"></span>
                         <span id="tag-status">Connecting to GitHub...</span>
                     </div>
+                    <a
+                        href="https://github.com/yuri-rage/ardupilot-parameter-explorer/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="github-link-pill"
+                        title="View source repository on GitHub"
+                    >
+                        <i class="fa-brands fa-github"></i> View Source
+                    </a>
                 </div>
             </header>
 
@@ -98,7 +125,7 @@
 
                 <!-- Selectors Row -->
                 <div class="selector-grid">
-                    <div class="input-group">
+                    <div class="input-group" id="version-select-group">
                         <label for="version-select"
                             >Firmware Version / Release Tag</label
                         >
@@ -111,7 +138,9 @@
                     </div>
 
                     <div class="input-group">
-                        <label for="search-input">Search</label>
+                        <label for="search-input" id="search-label"
+                            >Search</label
+                        >
                         <div class="search-box">
                             <i
                                 class="fa-solid fa-magnifying-glass search-icon"
@@ -192,7 +221,7 @@
             <main class="table-card">
                 <div class="table-responsive">
                     <table class="param-table">
-                        <thead>
+                        <thead id="table-head">
                             <tr>
                                 <th style="width: 220px">Parameter Name</th>
                                 <th style="width: 130px">Default Value</th>
@@ -215,8 +244,8 @@
                     <div class="spinner"></div>
                     <p>
                         <em
-                            >Fetching and parsing parameter definitions
-                            directly from GitHub & Autotest...</em
+                            >Fetching and parsing parameter definitions directly
+                            from GitHub & Autotest...</em
                         >
                     </p>
                 </div>
@@ -329,6 +358,22 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- Footer -->
+                <footer class="app-footer">
+                    <div class="footer-content">
+                        <span>ArduPilot Parameter & Log Message Explorer</span>
+                        <a
+                            href="https://github.com/yuri-rage/ardupilot-parameter-explorer/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="footer-github-link"
+                        >
+                            <i class="fa-brands fa-github"></i>
+                            yuri-rage/ardupilot-parameter-explorer
+                        </a>
+                    </div>
+                </footer>
             </main>
         </div>
 

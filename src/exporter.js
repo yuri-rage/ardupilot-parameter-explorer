@@ -83,3 +83,51 @@ export function generateJsonFile(parameters, vehicleName, versionTag) {
 		2,
 	);
 }
+
+/**
+ * Format log message list to CSV format
+ */
+export function generateLogCsvFile(logMessages) {
+	const header = [
+		"Log Message",
+		"Category",
+		"Fields Count",
+		"Field Names",
+		"Description",
+	];
+
+	const escapeCsv = (str) => {
+		if (!str) return '""';
+		const cleanStr = String(str).replace(/"/g, '""');
+		return `"${cleanStr}"`;
+	};
+
+	const rows = logMessages.map((m) =>
+		[
+			escapeCsv(m.name),
+			escapeCsv(m.category),
+			escapeCsv(m.fieldsCount),
+			escapeCsv(m.fields.map((f) => f.name).join(", ")),
+			escapeCsv(m.description),
+		].join(","),
+	);
+
+	return [header.join(","), ...rows].join("\n");
+}
+
+/**
+ * Format log message list to JSON format
+ */
+export function generateLogJsonFile(logMessages, vehicleName) {
+	return JSON.stringify(
+		{
+			application: "ArduPilot Log Message Explorer",
+			vehicle: vehicleName,
+			exportedAt: new Date().toISOString(),
+			totalMessages: logMessages.length,
+			logMessages: logMessages,
+		},
+		null,
+		2,
+	);
+}
